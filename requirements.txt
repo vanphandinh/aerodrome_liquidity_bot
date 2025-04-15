@@ -3,3 +3,4 @@ python-dotenv==1.0.1
 requests==2.31.0
 tabulate>=0.8.10
 python-telegram-bot==22.0
+asyncio==3.4.3

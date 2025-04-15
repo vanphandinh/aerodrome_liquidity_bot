@@ -1,5 +1,6 @@
 import os
 import requests
+import asyncio
 
 from decimal import Decimal, getcontext
 from telegram import Update, BotCommand
@@ -214,10 +215,42 @@ def send_ntfy_notification(
 
 def handle_telegram_commands(get_messages_func, parse_mode="MarkdownV2", bot_ready_hook=False):
     async def liquidity_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # 👤 Xóa tin nhắn gốc của người dùng sau 5 phút
+        try:
+            user_message = update.message
+            asyncio.create_task(delete_after_delay(
+                context=context,
+                chat_id=user_message.chat_id,
+                message_id=user_message.message_id,
+                delay=300
+            ))
+        except Exception as e:
+            print(f"⚠️ Failed to schedule user message deletion: {e}")
+
+        # 📬 Gửi các tin nhắn và hẹn xóa
         messages = await get_messages_func(update, context)
         for msg in messages:
-            await update.message.reply_text(msg, parse_mode=parse_mode)
+            try:
+                sent_msg = await update.message.reply_text(msg, parse_mode=parse_mode)
 
+                asyncio.create_task(delete_after_delay(
+                    context=context,
+                    chat_id=sent_msg.chat_id,
+                    message_id=sent_msg.message_id,
+                    delay=300
+                ))
+            except Exception as e:
+                print(f"⚠️ Error sending or scheduling deletion: {e}")
+
+    # 🧹 Hàm xóa sau delay
+    async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int):
+        await asyncio.sleep(delay)
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception as e:
+            print(f"❌ Failed to delete message {message_id}: {e}")
+
+    # 🚀 Khởi tạo bot
     app = ApplicationBuilder().token(telegram_bot_token).build()
     app.add_handler(CommandHandler("liquidity", liquidity_command))
 
