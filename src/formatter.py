@@ -40,9 +40,9 @@ class LPFormatter:
             f"Current: {current:.8f}"
         )
 
-    def format_position(self, pos, lp, token0, token1, staked: bool = True) -> str:
-        t0_amt = self.convert_token_amount(pos.staked0 if staked else pos.amount0, token0.decimals)
-        t1_amt = self.convert_token_amount(pos.staked1 if staked else pos.amount1, token1.decimals)
+    def format_position(self, pos, lp, token0, token1, is_staked: bool = True) -> str:
+        t0_amt = self.convert_token_amount(pos.staked0 if is_staked else pos.amount0, token0.decimals)
+        t1_amt = self.convert_token_amount(pos.staked1 if is_staked else pos.amount1, token1.decimals)
 
         price_now = self.sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
         price_upper = self.sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
@@ -71,11 +71,12 @@ class LPFormatter:
             )
             return msg + "\n"
 
-        elif self.style == "markdown":
+        elif self.style == "telegram":
             return (
                 f"📊 *LP Summary*: {token0.symbol}/{token1.symbol}\n"
                 f"💰 {token0.symbol}: `{t0_amt}`\n"
                 f"💰 {token1.symbol}: `{t1_amt}`\n"
+                f"🔒 Staked: *{'✅ Yes' if is_staked else '❌ No'}*\n"
                 f"📈 Tick Range: `{pos.tick_lower} → {lp.tick} → {pos.tick_upper}`\n"
                 f"🔍 Status: *{range_status}*\n"
                 f"💹 Price Now: `{price_now}`\n"
@@ -88,6 +89,7 @@ class LPFormatter:
                 f"📊 LP Summary: {token0.symbol}/{token1.symbol}\n"
                 f"💰 {token0.symbol}: {t0_amt}\n"
                 f"💰 {token1.symbol}: {t1_amt}\n"
+                f"🔒 Staked: {'✅ Yes' if is_staked else '❌ No'}\n"
                 f"📈 Tick Range: {pos.tick_lower} → {lp.tick} → {pos.tick_upper}\n"
                 f"🔍 Status: {range_status}\n"
                 f"💹 Price Now: {price_now}\n"

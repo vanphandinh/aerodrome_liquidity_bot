@@ -14,7 +14,7 @@ from alert_db import init_db, load_alerted_positions, add_alerted_position, remo
 
 
 formatter_ntfy = LPFormatter(style="ntfy")
-formatter_telegram = LPFormatter(style="markdown")
+formatter_telegram = LPFormatter(style="telegram")
 
 async def get_all_liquidity_messages(update=None, context=None) -> list[str]:
     if update is not None:
@@ -28,13 +28,13 @@ async def get_all_liquidity_messages(update=None, context=None) -> list[str]:
     for idx, pos in enumerate(all_positions):
         lp = lps[idx]
         token0, token1 = get_lp_token_info(lp)
-        msg = formatter_telegram.format_position(pos, lp, token0, token1, staked=True)
+        msg = formatter_telegram.format_position(pos, lp, token0, token1, is_staked=True)
         messages.append(msg)
 
     for idx, pos in enumerate(all_unstaked_positions):
         lp = unstaked_lps[idx]
         token0, token1 = get_lp_token_info(lp)
-        msg = formatter_telegram.format_position(pos, lp, token0, token1, staked=False)
+        msg = formatter_telegram.format_position(pos, lp, token0, token1, is_staked=False)
         messages.append(msg)
 
     if update is not None:
