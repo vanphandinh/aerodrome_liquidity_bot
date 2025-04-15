@@ -1,0 +1,5 @@
+.venv
+.env
+alerted_positions.db
+*.old
+src/__pycache__
