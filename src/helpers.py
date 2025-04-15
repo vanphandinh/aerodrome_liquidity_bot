@@ -2,12 +2,16 @@ import os
 import requests
 import asyncio
 
-from decimal import Decimal, getcontext
+from decimal import Decimal, ROUND_DOWN, getcontext
 from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from typing import List, Union, List
 from contract import sugar_lp, web3, erc20_abi
 from data_models import Lp, Position, Token
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from io import BytesIO
+
 
 account_address = os.getenv("ACCOUNT_ADDRESS")
 ntfy_topic = os.getenv("NTFY_TOPIC")
@@ -215,7 +219,6 @@ def send_ntfy_notification(
 
 def handle_telegram_commands(get_messages_func, parse_mode="MarkdownV2", bot_ready_hook=False):
     async def liquidity_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # 👤 Xóa tin nhắn gốc của người dùng sau 5 phút
         try:
             user_message = update.message
             asyncio.create_task(delete_after_delay(
@@ -227,11 +230,18 @@ def handle_telegram_commands(get_messages_func, parse_mode="MarkdownV2", bot_rea
         except Exception as e:
             print(f"⚠️ Failed to schedule user message deletion: {e}")
 
-        # 📬 Gửi các tin nhắn và hẹn xóa
-        messages = await get_messages_func(update, context)
-        for msg in messages:
+        # 👇 Lấy danh sách (message, image)
+        message_tuples = await get_messages_func(update, context)
+
+        # 📤 Gửi từng ảnh + caption
+        for msg, image in message_tuples:
             try:
-                sent_msg = await update.message.reply_text(msg, parse_mode=parse_mode)
+                sent_msg = await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=image,
+                    caption=msg,
+                    parse_mode=parse_mode
+                )
 
                 asyncio.create_task(delete_after_delay(
                     context=context,
@@ -240,7 +250,7 @@ def handle_telegram_commands(get_messages_func, parse_mode="MarkdownV2", bot_rea
                     delay=300
                 ))
             except Exception as e:
-                print(f"⚠️ Error sending or scheduling deletion: {e}")
+                print(f"⚠️ Error sending photo message: {e}")
 
     # 🧹 Hàm xóa sau delay
     async def delete_after_delay(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int):
@@ -273,3 +283,62 @@ def convert_by_decimals(raw_balance: int, decimals: int, precision: int = 4) -> 
 def convert_sqrtPriceX96_to_price(sqrtPriceX96: int, precision: int = 8) -> Decimal:
     getcontext().prec = precision + 10
     return (Decimal(sqrtPriceX96) ** 2) / Decimal(2 ** 192)
+
+
+def create_pretty_price_slider_fixed(lower_price, price_now, upper_price, precision=8):
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    from decimal import Decimal, ROUND_DOWN
+    from io import BytesIO
+
+    # Format function
+    def fmt(val):
+        d = Decimal(str(val)).quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
+        return format(d.normalize(), 'f')
+
+    lower = Decimal(str(lower_price))
+    current = Decimal(str(price_now))
+    upper = Decimal(str(upper_price))
+
+    # Determine full range including out-of-range price_now
+    min_range = min(lower, current, upper)
+    max_range = max(lower, current, upper)
+    margin = (max_range - min_range) * Decimal("0.3")
+    view_min = float(min_range - margin)
+    view_max = float(max_range + margin)
+
+    lower_f = float(lower)
+    current_f = float(current)
+    upper_f = float(upper)
+
+    # Setup plot
+    fig, ax = plt.subplots(figsize=(9, 2.5))
+    ax.set_xlim(view_min, view_max)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+
+    # Draw zones
+    ax.add_patch(patches.Rectangle((view_min, 0.45), lower_f - view_min, 0.1, color='#e0e0e0'))  # OUT left
+    ax.add_patch(patches.Rectangle((lower_f, 0.45), upper_f - lower_f, 0.1, color='#4A90E2'))    # ACTIVE RANGE
+    ax.add_patch(patches.Rectangle((upper_f, 0.45), view_max - upper_f, 0.1, color='#e0e0e0'))  # OUT right
+
+    # Current price marker
+    ax.plot([current_f, current_f], [0.35, 0.65], color='#D0021B', linewidth=2, zorder=3)
+    ax.plot(current_f, 0.55, marker='o', markersize=8, color='#D0021B', zorder=4)
+
+    # Price labels
+    ax.text(lower_f, 0.75, fmt(lower), ha='center', va='bottom', fontsize=10, fontweight='bold')
+    ax.text(upper_f, 0.75, fmt(upper), ha='center', va='bottom', fontsize=10, fontweight='bold')
+    ax.text(current_f, 0.31, fmt(current), ha='center', va='top', fontsize=10, color='#D0021B', fontweight='bold')
+
+    # Zone labels
+    ax.text((view_min + lower_f) / 2, 0.17, "OUT", ha='center', va='center', fontsize=9, color='gray')
+    ax.text((lower_f + upper_f) / 2, 0.17, "ACTIVE RANGE", ha='center', va='center', fontsize=9, color='#4A90E2')
+    ax.text((upper_f + view_max) / 2, 0.17, "OUT", ha='center', va='center', fontsize=9, color='gray')
+
+    # Save to buffer
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+    buf.seek(0)
+    plt.close()
+    return buf
