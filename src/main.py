@@ -10,7 +10,7 @@ from helpers import (
     handle_telegram_commands,
     convert_sqrtPriceX96_to_price
 )
-from alert_db import init_db, load_alerted_positions, add_alerted_position, remove_alerted_position
+from alert_db import init_db, load_alerted_positions, add_alerted_position, remove_alerted_position, cleanup_alerted_positions
 
 
 formatter_ntfy = LPFormatter(style="ntfy")
@@ -55,6 +55,19 @@ def run_alert_loop(interval_minutes=3):
         all_positions, all_unstaked_positions = get_all_positions()
         lps = get_lps_from_positions(all_positions)
         unstaked_lps = get_lps_from_positions(all_unstaked_positions)
+
+        # Tạo danh sách các key hợp lệ hiện tại
+        valid_keys = set()
+        for pos in all_positions:
+            valid_keys.add(f"position_{pos.id}")
+        for pos in all_unstaked_positions:
+            valid_keys.add(f"position_{pos.id}")
+
+        # Dọn sạch những position không còn tồn tại
+        cleanup_alerted_positions(valid_keys)
+
+        # Cập nhật lại bộ nhớ đệm
+        alerted_positions = load_alerted_positions()
 
         def check_and_alert(positions, lps, staked=True):
             for idx, pos in enumerate(positions):
