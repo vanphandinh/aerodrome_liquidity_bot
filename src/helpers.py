@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_DOWN, getcontext
 from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from typing import List, Union, List
-from contract import sugar_lp, web3, erc20_abi
+from contract import sugar_lp, web3, erc20_abi, price_oracle
 from data_models import Lp, Position, Token
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -16,6 +16,8 @@ from io import BytesIO
 account_address = os.getenv("ACCOUNT_ADDRESS")
 ntfy_topic = os.getenv("NTFY_TOPIC")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+usdc = os.getenv("USDC_ADDRESS")
+aero = os.getenv("AERO_ADDRESS")
 
 def get_all_lp(limit: int, offset: int) -> List[Lp]:
     result = sugar_lp.functions.all(limit, offset).call()
@@ -193,8 +195,7 @@ def send_ntfy_notification(
     """
     url = f"https://ntfy.sh/{topic}"
     headers = {
-        "Priority": priority,
-        "Markdown": "yes"
+        "Priority": priority
     }
 
     if title:
@@ -286,11 +287,6 @@ def convert_sqrtPriceX96_to_price(sqrtPriceX96: int, precision: int = 8) -> Deci
 
 
 def create_pretty_price_slider_fixed(lower_price, price_now, upper_price, precision=8):
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-    from decimal import Decimal, ROUND_DOWN
-    from io import BytesIO
-
     # Format function
     def fmt(val):
         d = Decimal(str(val)).quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
@@ -342,3 +338,29 @@ def create_pretty_price_slider_fixed(lower_price, price_now, upper_price, precis
     buf.seek(0)
     plt.close()
     return buf
+
+
+def get_token_price_batch(token_list: List[str]) -> List[str]:
+    prices = []
+
+    with web3.batch_requests() as batch:
+        for token in token_list:
+            batch.add(price_oracle.functions.getRate(token, usdc, False))
+        batch_responses = batch.execute()
+    batch.clear()
+
+    for result in batch_responses:
+        prices.append(result)
+
+    return prices    
+
+
+def cal_lp_apr(lp: Lp, precision: int = 3) -> Decimal:
+    getcontext().prec = precision + 10
+    apr = 0
+    emissions = lp.emissions
+    staked_token0 = lp.staked0
+    staked_token1 = lp.staked1
+    token_prices = get_token_price_batch([lp.token0, lp.token1, aero])
+    apr = 100 * Decimal(31_556_926 * emissions) * Decimal(token_prices[2]) / (Decimal(token_prices[0]) * Decimal(staked_token0) + Decimal(token_prices[1]) * Decimal(staked_token1))
+    return apr
