@@ -73,12 +73,12 @@ class LPFormatter:
 
         elif self.style == "telegram":
             return (
-                f"📊 *LP Summary*: {token0.symbol}/{token1.symbol}\n"
+                f"📊 *LP Summary*: {token0.symbol}/{token1.symbol}\n\n"
                 f"💰 {token0.symbol}: `{t0_amt}`\n"
                 f"💰 {token1.symbol}: `{t1_amt}`\n"
                 f"🔒 Staked: *{'✅ Yes' if is_staked else '❌ No'}*\n"
+                f"🔍 Status: *{range_status}*\n\n"
                 f"📈 Tick Range: `{pos.tick_lower} → {lp.tick} → {pos.tick_upper}`\n"
-                f"🔍 Status: *{range_status}*\n"
                 f"💹 Price Now: `{price_now}`\n"
                 f"🔼 Upper Price: `{price_upper}`\n"
                 f"🔽 Lower Price: `{price_lower}`"
@@ -86,12 +86,12 @@ class LPFormatter:
         
         elif self.style == "ntfy":
             return (
-                f"📊 LP Summary: {token0.symbol}/{token1.symbol}\n"
+                f"📊 LP Summary: {token0.symbol}/{token1.symbol}\n\n"
                 f"💰 {token0.symbol}: {t0_amt}\n"
                 f"💰 {token1.symbol}: {t1_amt}\n"
                 f"🔒 Staked: {'✅ Yes' if is_staked else '❌ No'}\n"
+                f"🔍 Status: {range_status}\n\n"
                 f"📈 Tick Range: {pos.tick_lower} → {lp.tick} → {pos.tick_upper}\n"
-                f"🔍 Status: {range_status}\n"
                 f"💹 Price Now: {price_now}\n"
                 f"🔼 Upper Price: {price_upper}\n"
                 f"🔽 Lower Price: {price_lower}"
