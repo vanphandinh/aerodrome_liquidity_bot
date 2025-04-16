@@ -1,6 +1,7 @@
 import os
 import requests
 import asyncio
+import traceback
 
 from decimal import Decimal, ROUND_DOWN, getcontext
 from telegram import Update, BotCommand
@@ -21,6 +22,11 @@ telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
 usdc = os.getenv("USDC_ADDRESS")
 aero = os.getenv("AERO_ADDRESS")
 
+
+def handle_error(e: Exception, context: str = "Error"):
+    print(traceback.format_exc())
+    send_ntfy_notification(f"❌ {context} - {type(e).__name__}: {e}")
+
 def get_all_lp(limit: int, offset: int) -> List[Lp]:
     result = sugar_lp.functions.all(limit, offset).call()
     return [Lp(*item) for item in result]
@@ -34,7 +40,6 @@ def get_all_lp_batch(limit: int = 300, batch_size: int = 3, start_offset: int = 
         for offset in offsets:
             batch.add(sugar_lp.functions.all(limit, offset))
         batch_responses = batch.execute()
-    batch.clear()
 
     for result in batch_responses:
         all_lps.extend([Lp(*item) for item in result])
@@ -65,7 +70,6 @@ def get_positions_batch(
         for offset in offsets:
             batch.add(sugar_lp.functions.positions(limit, offset, web3.to_checksum_address(account)))
         batch_responses = batch.execute()
-    batch.clear()
 
     for result in batch_responses:
         positions.extend([Position(*item) for item in result])
@@ -86,7 +90,6 @@ def get_positions_unstaked_concentrated_batch(
         for offset in offsets:
             batch.add(sugar_lp.functions.positionsUnstakedConcentrated(limit, offset, web3.to_checksum_address(account)))
         batch_responses = batch.execute()
-    batch.clear()
 
     for result in batch_responses:
         positions.extend([Position(*item) for item in result])
@@ -150,7 +153,6 @@ def get_lps_from_positions(positions: List[Position]) -> List[Lp]:
         for pos in positions:
             batch.add(sugar_lp.functions.byAddress(web3.to_checksum_address(pos.lp)))
         batch_responses = batch.execute()
-    batch.clear()
 
     for result in batch_responses:
         lps.append(Lp(*result))
@@ -168,7 +170,6 @@ def get_lp_token_info(lp: Lp) -> tuple[Token, Token]:
         batch.add(token1.functions.symbol())
         batch.add(token1.functions.decimals())
         batch_responses = batch.execute()
-    batch.clear()
 
     return (Token(batch_responses[0], batch_responses[1]), Token(batch_responses[2], batch_responses[3]))
 
@@ -368,7 +369,6 @@ def get_token_price_batch(token_list: List[str]) -> List[str]:
         for token in token_list:
             batch.add(price_oracle.functions.getRate(token, usdc, False))
         batch_responses = batch.execute()
-    batch.clear()
 
     for result in batch_responses:
         prices.append(result)

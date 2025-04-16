@@ -1,5 +1,4 @@
 import time
-import traceback
 from threading import Thread
 from io import BytesIO
 
@@ -11,7 +10,8 @@ from helpers import (
     send_ntfy_notification,
     handle_telegram_commands,
     convert_sqrtPriceX96_to_price,
-    create_price_slider
+    create_price_slider,
+    handle_error
 )
 from alert_db import (
     init_db, load_alerted_positions, add_alerted_position,
@@ -21,11 +21,6 @@ from alert_db import (
 
 formatter_ntfy = LPFormatter(style="ntfy")
 formatter_telegram = LPFormatter(style="telegram")
-
-
-def handle_error(e: Exception, context: str = "Error"):
-    print(traceback.format_exc())
-    send_ntfy_notification(f"❌ {context} - {type(e).__name__}: {e}")
 
 
 async def get_all_liquidity_messages(update=None, context=None) -> list[tuple[str, BytesIO]]:
