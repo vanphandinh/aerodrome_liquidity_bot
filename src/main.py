@@ -1,8 +1,9 @@
 import time
-
+import traceback
 from threading import Thread
-from formatter import LPFormatter
 from io import BytesIO
+
+from formatter import LPFormatter
 from helpers import (
     get_all_positions,
     get_lps_from_positions,
@@ -12,111 +13,109 @@ from helpers import (
     convert_sqrtPriceX96_to_price,
     create_price_slider
 )
-from alert_db import init_db, load_alerted_positions, add_alerted_position, remove_alerted_position, cleanup_alerted_positions
+from alert_db import (
+    init_db, load_alerted_positions, add_alerted_position,
+    remove_alerted_position, cleanup_alerted_positions
+)
 
 
 formatter_ntfy = LPFormatter(style="ntfy")
 formatter_telegram = LPFormatter(style="telegram")
 
 
+def handle_error(e: Exception, context: str = "Error"):
+    print(traceback.format_exc())
+    send_ntfy_notification(f"❌ {context} - {type(e).__name__}: {e}")
+
+
 async def get_all_liquidity_messages(update=None, context=None) -> list[tuple[str, BytesIO]]:
     results = []
-
-    # Gửi tin nhắn chờ đơn giản
     waiting_message = None
-    if update is not None:
-        try:
-            waiting_message = await update.message.reply_text(
-                "⏳ Fetching liquidity data, please wait...",
-                parse_mode=None
-            )
-        except Exception as e:
-            print(f"⚠️ Failed to send waiting message: {e}")
 
-    # Lấy dữ liệu LP positions
-    all_positions, all_unstaked_positions = get_all_positions()
-    lps = get_lps_from_positions(all_positions)
-    unstaked_lps = get_lps_from_positions(all_unstaked_positions)
+    try:
+        if update:
+            waiting_message = await update.message.reply_text("⏳ Fetching liquidity data, please wait...", parse_mode=None)
 
-    def build_entry(pos, lp, token0, token1, is_staked):
-        msg = formatter_telegram.format_position(pos, lp, token0, token1, is_staked)
-        price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
-        price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
-        price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
-        image_bytes = create_price_slider(price_lower, price_now, price_upper)
-        return (msg, image_bytes)
+        all_positions, all_unstaked_positions = get_all_positions()
+        lps = get_lps_from_positions(all_positions)
+        unstaked_lps = get_lps_from_positions(all_unstaked_positions)
 
-    for idx, pos in enumerate(all_positions):
-        lp = lps[idx]
-        token0, token1 = get_lp_token_info(lp)
-        results.append(build_entry(pos, lp, token0, token1, is_staked=True))
+        def build_entry(pos, lp, is_staked):
+            token0, token1 = get_lp_token_info(lp)
+            msg = formatter_telegram.format_position(pos, lp, token0, token1, is_staked)
+            price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
+            price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
+            price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+            image = create_price_slider(price_lower, price_now, price_upper)
+            return (msg, image)
 
-    for idx, pos in enumerate(all_unstaked_positions):
-        lp = unstaked_lps[idx]
-        token0, token1 = get_lp_token_info(lp)
-        results.append(build_entry(pos, lp, token0, token1, is_staked=False))
+        results += [build_entry(pos, lps[i], True) for i, pos in enumerate(all_positions)]
+        results += [build_entry(pos, unstaked_lps[i], False) for i, pos in enumerate(all_unstaked_positions)]
 
-    # Xóa tin nhắn chờ
-    if update is not None and waiting_message is not None:
-        try:
-            await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=waiting_message.message_id)
-        except Exception as e:
-            print(f"⚠️ Failed to delete waiting message: {e}")
+    except Exception as e:
+        handle_error(e, "Liquidity Fetch")
+
+    finally:
+        if update and waiting_message:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=waiting_message.message_id)
+            except Exception as e:
+                print(f"⚠️ Failed to delete waiting message: {e}")
 
     return results
 
 
 def run_alert_loop(interval_minutes=3):
-    init_db()
-    alerted_positions = load_alerted_positions()
+    try:
+        init_db()
 
-    while True:
-        print("🔄 Scanning LP positions for alert...")
-        all_positions, all_unstaked_positions = get_all_positions()
-        lps = get_lps_from_positions(all_positions)
-        unstaked_lps = get_lps_from_positions(all_unstaked_positions)
+        while True:
+            try:
+                print("🔄 Scanning LP positions for alert...")
+                all_positions, all_unstaked_positions = get_all_positions()
+                lps = get_lps_from_positions(all_positions)
+                unstaked_lps = get_lps_from_positions(all_unstaked_positions)
 
-        # Tạo danh sách các key hợp lệ hiện tại
-        valid_keys = set()
-        for pos in all_positions:
-            valid_keys.add(f"position_{pos.id}")
-        for pos in all_unstaked_positions:
-            valid_keys.add(f"position_{pos.id}")
+                valid_keys = {f"position_{pos.id}" for pos in all_positions + all_unstaked_positions}
+                cleanup_alerted_positions(valid_keys)
+                alerted = load_alerted_positions()
 
-        # Dọn sạch những position không còn tồn tại
-        cleanup_alerted_positions(valid_keys)
+                def check_and_alert(positions, lps, is_staked):
+                    for i, pos in enumerate(positions):
+                        lp = lps[i]
+                        token0, token1 = get_lp_token_info(lp)
+                        price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
+                        price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
+                        price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+                        in_range = price_lower <= price_now <= price_upper
+                        key = f"position_{pos.id}"
 
-        # Cập nhật lại bộ nhớ đệm
-        alerted_positions = load_alerted_positions()
+                        if not in_range and key not in alerted:
+                            msg = formatter_ntfy.format_position(pos, lp, token0, token1, is_staked)
+                            send_ntfy_notification(msg)
+                            add_alerted_position(key)
+                            alerted.add(key)
+                        elif in_range and key in alerted:
+                            remove_alerted_position(key)
+                            alerted.remove(key)
 
-        def check_and_alert(positions, lps, is_staked=True):
-            for idx, pos in enumerate(positions):
-                lp = lps[idx]
-                token0, token1 = get_lp_token_info(lp)
+                check_and_alert(all_positions, lps, True)
+                check_and_alert(all_unstaked_positions, unstaked_lps, False)
 
-                price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
-                price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
-                price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+                print(f"✅ Done. Sleeping {interval_minutes} minutes...\n")
+                time.sleep(interval_minutes * 60)
 
-                in_range = price_lower <= price_now <= price_upper
-                pos_key = f"position_{pos.id}"
+            except Exception as e:
+                handle_error(e, "Alert Loop")
+                time.sleep(10)
 
-                if not in_range and pos_key not in alerted_positions:
-                    msg = formatter_ntfy.format_position(pos, lp, token0, token1, is_staked=is_staked)
-                    send_ntfy_notification(msg)
-                    add_alerted_position(pos_key)
-                    alerted_positions.add(pos_key)
-                elif in_range and pos_key in alerted_positions:
-                    remove_alerted_position(pos_key)
-                    alerted_positions.remove(pos_key)
-
-        check_and_alert(all_positions, lps, is_staked=True)
-        check_and_alert(all_unstaked_positions, unstaked_lps, is_staked=False)
-
-        print(f"✅ Done. Sleeping {interval_minutes} minutes...\n")
-        time.sleep(interval_minutes * 60)
+    except Exception as e:
+        handle_error(e, "Init Alert Loop")
 
 
 if __name__ == "__main__":
-    Thread(target=run_alert_loop, daemon=True).start()
-    handle_telegram_commands(get_all_liquidity_messages, parse_mode="MarkdownV2", bot_ready_hook=True)
+    try:
+        Thread(target=run_alert_loop, daemon=True).start()
+        handle_telegram_commands(get_all_liquidity_messages, parse_mode="MarkdownV2", bot_ready_hook=True)
+    except Exception as e:
+        handle_error(e, "Main Thread")
