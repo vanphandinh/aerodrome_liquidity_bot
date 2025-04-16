@@ -3,7 +3,6 @@ import time
 from threading import Thread
 from formatter import LPFormatter
 from io import BytesIO
-import random
 from helpers import (
     get_all_positions,
     get_lps_from_positions,
@@ -11,7 +10,7 @@ from helpers import (
     send_ntfy_notification,
     handle_telegram_commands,
     convert_sqrtPriceX96_to_price,
-    create_pretty_price_slider_fixed
+    create_price_slider
 )
 from alert_db import init_db, load_alerted_positions, add_alerted_position, remove_alerted_position, cleanup_alerted_positions
 
@@ -44,7 +43,7 @@ async def get_all_liquidity_messages(update=None, context=None) -> list[tuple[st
         price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
         price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
         price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
-        image_bytes = create_pretty_price_slider_fixed(price_lower, price_now, price_upper)
+        image_bytes = create_price_slider(price_lower, price_now, price_upper)
         return (msg, image_bytes)
 
     for idx, pos in enumerate(all_positions):

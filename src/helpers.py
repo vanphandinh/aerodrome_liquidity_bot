@@ -9,8 +9,10 @@ from typing import List, Union, List
 from contract import sugar_lp, web3, erc20_abi, price_oracle
 from data_models import Lp, Position, Token
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from io import BytesIO
+from matplotlib.patches import FancyBboxPatch
+from matplotlib.pyplot import subplots
+import matplotlib
 
 
 account_address = os.getenv("ACCOUNT_ADDRESS")
@@ -286,57 +288,76 @@ def convert_sqrtPriceX96_to_price(sqrtPriceX96: int, precision: int = 8) -> Deci
     return (Decimal(sqrtPriceX96) ** 2) / Decimal(2 ** 192)
 
 
-def create_pretty_price_slider_fixed(lower_price, price_now, upper_price, precision=8):
-    # Format function
+def create_price_slider(lower_price, price_now, upper_price, precision=8):
     def fmt(val):
         d = Decimal(str(val)).quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
         return format(d.normalize(), 'f')
 
-    lower = Decimal(str(lower_price))
-    current = Decimal(str(price_now))
-    upper = Decimal(str(upper_price))
-
-    # Determine full range including out-of-range price_now
-    min_range = min(lower, current, upper)
-    max_range = max(lower, current, upper)
+    lower, current, upper = map(lambda v: Decimal(str(v)), (lower_price, price_now, upper_price))
+    min_range, max_range = min(lower, current, upper), max(lower, current, upper)
     margin = (max_range - min_range) * Decimal("0.3")
-    view_min = float(min_range - margin)
-    view_max = float(max_range + margin)
+    view_min, view_max = float(min_range - margin), float(max_range + margin)
+    lower_f, current_f, upper_f = map(float, (lower, current, upper))
 
-    lower_f = float(lower)
-    current_f = float(current)
-    upper_f = float(upper)
-
-    # Setup plot
-    fig, ax = plt.subplots(figsize=(9, 2.5))
-    ax.set_xlim(view_min, view_max)
-    ax.set_ylim(0, 1)
+    fig, ax = subplots(figsize=(9, 3.6), facecolor='#101615')
+    ax.set(xlim=(view_min, view_max), ylim=(0, 1.8))
     ax.axis('off')
 
-    # Draw zones
-    ax.add_patch(patches.Rectangle((view_min, 0.45), lower_f - view_min, 0.1, color='#e0e0e0'))  # OUT left
-    ax.add_patch(patches.Rectangle((lower_f, 0.45), upper_f - lower_f, 0.1, color='#4A90E2'))    # ACTIVE RANGE
-    ax.add_patch(patches.Rectangle((upper_f, 0.45), view_max - upper_f, 0.1, color='#e0e0e0'))  # OUT right
+    # Layout constants
+    bar_y = 0.9
+    bar_height = 0.06
+    arrow_offset = 0.10
+    label_offset = 0.45  # đã kéo xuống thêm để tránh đè
+    symmetric_offset = 0.18
 
-    # Current price marker
-    ax.plot([current_f, current_f], [0.35, 0.65], color='#D0021B', linewidth=2, zorder=3)
-    ax.plot(current_f, 0.55, marker='o', markersize=8, color='#D0021B', zorder=4)
+    active_color = '#00e6b8'
+    bg_color = '#5f6d67'
+    tick_color = '#f6c744'
 
-    # Price labels
-    ax.text(lower_f, 0.75, fmt(lower), ha='center', va='bottom', fontsize=10, fontweight='bold')
-    ax.text(upper_f, 0.75, fmt(upper), ha='center', va='bottom', fontsize=10, fontweight='bold')
-    ax.text(current_f, 0.31, fmt(current), ha='center', va='top', fontsize=10, color='#D0021B', fontweight='bold')
+    # Bar backgrounds
+    ax.add_patch(FancyBboxPatch((view_min, bar_y - bar_height / 2),
+                                view_max - view_min, bar_height,
+                                boxstyle="round,pad=0.01", linewidth=0, facecolor=bg_color))
+    ax.add_patch(matplotlib.patches.Rectangle((lower_f, bar_y - bar_height / 2),
+                                              upper_f - lower_f, bar_height,
+                                              linewidth=0, facecolor=active_color, zorder=1))
 
-    # Zone labels
-    ax.text((view_min + lower_f) / 2, 0.17, "OUT", ha='center', va='center', fontsize=9, color='gray')
-    ax.text((lower_f + upper_f) / 2, 0.17, "ACTIVE RANGE", ha='center', va='center', fontsize=9, color='#4A90E2')
-    ax.text((upper_f + view_max) / 2, 0.17, "OUT", ha='center', va='center', fontsize=9, color='gray')
+    # Endpoint circles
+    for x in (lower_f, upper_f):
+        ax.plot(x, bar_y, marker='o', markersize=13, color=active_color, zorder=2)
 
-    # Save to buffer
+    # Vertical tick
+    ax.plot([current_f]*2, [bar_y - arrow_offset, bar_y + arrow_offset],
+            color=tick_color, linewidth=2, zorder=3)
+    ax.annotate('', xy=(current_f, bar_y), xytext=(current_f, bar_y + arrow_offset),
+                arrowprops=dict(arrowstyle='-|>', color=tick_color, linewidth=2), zorder=4)
+    ax.annotate('', xy=(current_f, bar_y - arrow_offset), xytext=(current_f, bar_y),
+                arrowprops=dict(arrowstyle='<|-', color=tick_color, linewidth=2), zorder=4)
+
+    # Zone labels (kéo thấp hơn)
+    ax.text((view_min + lower_f) / 2, bar_y - label_offset, "OUT",
+            ha='center', va='center', fontsize=9, color='gray')
+    ax.text((lower_f + upper_f) / 2, bar_y - label_offset, "ACTIVE RANGE",
+            ha='center', va='center', fontsize=9, color=active_color)
+    ax.text((upper_f + view_max) / 2, bar_y - label_offset, "OUT",
+            ha='center', va='center', fontsize=9, color='gray')
+
+    # Price values (upper/lower)
+    ax.text(lower_f, bar_y + symmetric_offset, fmt(lower),
+            ha='center', va='bottom', fontsize=10, color=active_color, fontweight='bold')
+    ax.text(upper_f, bar_y + symmetric_offset, fmt(upper),
+            ha='center', va='bottom', fontsize=10, color=active_color, fontweight='bold')
+
+    # Boxed current price (cách thanh giá một khoảng bằng upper/lower)
+    ax.text(current_f, bar_y - symmetric_offset, fmt(current),
+            ha='center', va='top', fontsize=10, fontweight='bold',
+            color=tick_color,
+            bbox=dict(boxstyle="round,pad=0.25", fc="#101615", ec=tick_color, lw=1.5))
+
     buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-    buf.seek(0)
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
     plt.close()
+    buf.seek(0)
     return buf
 
 
@@ -357,10 +378,12 @@ def get_token_price_batch(token_list: List[str]) -> List[str]:
 
 def cal_lp_apr(lp: Lp, precision: int = 3) -> Decimal:
     getcontext().prec = precision + 10
+    token0, token1 = get_lp_token_info(lp)
     apr = 0
     emissions = lp.emissions
     staked_token0 = lp.staked0
     staked_token1 = lp.staked1
     token_prices = get_token_price_batch([lp.token0, lp.token1, aero])
-    apr = 100 * Decimal(31_556_926 * emissions) * Decimal(token_prices[2]) / (Decimal(token_prices[0]) * Decimal(staked_token0) + Decimal(token_prices[1]) * Decimal(staked_token1))
+    apr = 100 * convert_by_decimals(31_556_926 * emissions, 18) * Decimal(token_prices[2]) / (Decimal(token_prices[0]) * convert_by_decimals(staked_token0, token0.decimals) 
+       + Decimal(token_prices[1]) * convert_by_decimals(staked_token1, token1.decimals))
     return apr
