@@ -6,14 +6,9 @@ from itertools import cycle
 
 load_dotenv()
 
-rpc_endpoints = [
-    "https://base-mainnet.public.blastapi.io",
-    "https://base.rpc.subquery.network/public",
-    "https://base.drpc.org",
-    "https://api.zan.top/base-mainnet",
-    "https://base.blockpi.network/v1/rpc/public",
-    "https://base-pokt.nodies.app",
-    "https://0xrpc.io/base"
+wss_rpc_endpoints = [
+    "wss://base-rpc.publicnode.com",
+    "wss://0xrpc.io/base"
 ]
 sugar_lp_address = Web3.to_checksum_address(os.getenv("SUGAR_LP_ADDRESS"))
 price_oracle_address = Web3.to_checksum_address(os.getenv("PRICE_ORACLE_ADDRESS"))
@@ -32,7 +27,7 @@ rpc_cycle = cycle(rpc_endpoints)
 
 def get_web3():
     url = next(rpc_cycle)
-    return Web3(Web3.HTTPProvider(url))
+    return Web3(Web3.WebsocketProvider(url))
 
 
 web3 = get_web3()
