@@ -23,7 +23,7 @@ with open('./abi/OffchainOracle.json', 'r') as abi_file:
     price_oracle_abi = json.load(abi_file)    
 
 
-rpc_cycle = cycle(rpc_endpoints)
+rpc_cycle = cycle(wss_rpc_endpoints)
 
 def get_web3():
     url = next(rpc_cycle)
