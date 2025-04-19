@@ -10,7 +10,7 @@ rpc_endpoints = [
     "https://base-rpc.publicnode.com",
     "https://base-mainnet.g.alchemy.com/v2/kPcGp_dGOu5_SZcimim9MENYoCRjRhme",
     "https://base-mainnet.blastapi.io/60127835-9b43-4e83-a01f-264fb2a820f4",
-    "https://rpc.ankr.com/base/0bda9fd26145d611152a6eec8b728bf7747688a87037d5da4a0bb1feb42977f8"
+    # "https://rpc.ankr.com/base/0bda9fd26145d611152a6eec8b728bf7747688a87037d5da4a0bb1feb42977f8"
 ]
 sugar_lp_address = Web3.to_checksum_address(os.getenv("SUGAR_LP_ADDRESS"))
 price_oracle_address = Web3.to_checksum_address(os.getenv("PRICE_ORACLE_ADDRESS"))
