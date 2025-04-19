@@ -3,18 +3,21 @@ import requests
 import asyncio
 import traceback
 
+from web3 import Web3
 from decimal import Decimal, ROUND_DOWN, getcontext
 from telegram import Update, BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from typing import List, Union, List
 from threading import Lock
-import matplotlib.pyplot as plt
 from io import BytesIO
+
+import matplotlib
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.pyplot import subplots
-import matplotlib
 
-from web3 import Web3
 from contract import get_web3, erc20_abi, price_oracle, sugar_lp
 from data_models import Lp, Position, Token
 
