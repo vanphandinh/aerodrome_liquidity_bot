@@ -14,7 +14,8 @@ from matplotlib.patches import FancyBboxPatch
 from matplotlib.pyplot import subplots
 import matplotlib
 
-from contract import sugar_lp, web3, erc20_abi, price_oracle
+from web3 import Web3
+from contract import get_web3, erc20_abi, price_oracle, sugar_lp
 from data_models import Lp, Position, Token
 
 account_address = os.getenv("ACCOUNT_ADDRESS")
@@ -31,8 +32,9 @@ def safe_batch_requests():
     class SafeBatch:
         def __enter__(self):
             web3_batch_lock.acquire()
-            self.batch = web3.batch_requests()
-            return self.batch
+            self.web3 = get_web3()
+            self.batch = self.web3.batch_requests()
+            return (self.web3, self.batch)
 
         def __exit__(self, exc_type, exc_value, tb):
             web3_batch_lock.release()
@@ -43,8 +45,10 @@ def handle_error(e: Exception, context: str = "Error"):
     print(traceback.format_exc())
     send_ntfy_notification(f"❌ {context} - {type(e).__name__}: {e}")
 
+
 def get_all_lp(limit: int, offset: int) -> List[Lp]:
-    result = sugar_lp.functions.all(limit, offset).call()
+    web3 = get_web3()
+    result = sugar_lp(web3).functions.all(limit, offset).call()
     return [Lp(*item) for item in result]
 
 
@@ -52,9 +56,9 @@ def get_all_lp_batch(limit: int = 300, batch_size: int = 3, start_offset: int = 
     all_lps = []
     offsets = [start_offset + i * limit for i in range(batch_size)]
 
-    with safe_batch_requests() as batch:
+    with safe_batch_requests() as (web3, batch):
         for offset in offsets:
-            batch.add(sugar_lp.functions.all(limit, offset))
+            batch.add(sugar_lp(web3).functions.all(limit, offset))
         batch_responses = batch.execute()
 
     for result in batch_responses:
@@ -64,12 +68,14 @@ def get_all_lp_batch(limit: int = 300, batch_size: int = 3, start_offset: int = 
 
 
 def get_lp_by_address(pool_address: str) -> Lp:
-    result = sugar_lp.functions.byAddress(web3.to_checksum_address(pool_address)).call()
+    web3 = get_web3()
+    result = sugar_lp(web3).functions.byAddress(Web3.to_checksum_address(pool_address)).call()
     return Lp(*result)
 
 
 def get_positions(limit: int, offset: int, account: str) -> List[Position]:
-    result = sugar_lp.functions.positions(limit, offset, web3.to_checksum_address(account)).call()
+    web3 = get_web3()
+    result = sugar_lp(web3).functions.positions(limit, offset, Web3.to_checksum_address(account)).call()
     return [Position(*item) for item in result]
 
 
@@ -82,9 +88,9 @@ def get_positions_batch(
     positions = []
     offsets = [start_offset + i * limit for i in range(batch_size)]
 
-    with safe_batch_requests() as batch:
+    with safe_batch_requests() as (web3, batch):
         for offset in offsets:
-            batch.add(sugar_lp.functions.positions(limit, offset, web3.to_checksum_address(account)))
+            batch.add(sugar_lp(web3).functions.positions(limit, offset, Web3.to_checksum_address(account)))
         batch_responses = batch.execute()
 
     for result in batch_responses:
@@ -102,9 +108,9 @@ def get_positions_unstaked_concentrated_batch(
     positions = []
     offsets = [start_offset + i * limit for i in range(batch_size)]
 
-    with safe_batch_requests() as batch:
+    with safe_batch_requests() as (web3, batch):
         for offset in offsets:
-            batch.add(sugar_lp.functions.positionsUnstakedConcentrated(limit, offset, web3.to_checksum_address(account)))
+            batch.add(sugar_lp(web3).functions.positionsUnstakedConcentrated(limit, offset, Web3.to_checksum_address(account)))
         batch_responses = batch.execute()
 
     for result in batch_responses:
@@ -114,7 +120,8 @@ def get_positions_unstaked_concentrated_batch(
 
 
 def get_positions_unstaked_concentrated(limit: int, offset: int, account: str) -> List[Position]:
-    result = sugar_lp.functions.positionsUnstakedConcentrated(limit, offset, web3.to_checksum_address(account)).call()
+    web3 = get_web3()
+    result = sugar_lp(web3).functions.positionsUnstakedConcentrated(limit, offset, Web3.to_checksum_address(account)).call()
     return [Position(*item) for item in result]
 
 
@@ -165,9 +172,9 @@ def get_lps_from_positions(positions: List[Position]) -> List[Lp]:
     if len(positions) == 0:
         return lps
 
-    with safe_batch_requests() as batch:
+    with safe_batch_requests() as (web3, batch):
         for pos in positions:
-            batch.add(sugar_lp.functions.byAddress(web3.to_checksum_address(pos.lp)))
+            batch.add(sugar_lp(web3).functions.byAddress(Web3.to_checksum_address(pos.lp)))
         batch_responses = batch.execute()
 
     for result in batch_responses:
@@ -177,10 +184,10 @@ def get_lps_from_positions(positions: List[Position]) -> List[Lp]:
     
 
 def get_lp_token_info(lp: Lp) -> tuple[Token, Token]:
-    token0 = web3.eth.contract(address=web3.to_checksum_address(lp.token0), abi=erc20_abi)
-    token1 = web3.eth.contract(address=web3.to_checksum_address(lp.token1), abi=erc20_abi)
+    with safe_batch_requests() as (web3, batch):
+        token0 = web3.eth.contract(address=Web3.to_checksum_address(lp.token0), abi=erc20_abi)
+        token1 = web3.eth.contract(address=Web3.to_checksum_address(lp.token1), abi=erc20_abi)
 
-    with safe_batch_requests() as batch:
         batch.add(token0.functions.symbol())
         batch.add(token0.functions.decimals())
         batch.add(token1.functions.symbol())
@@ -381,9 +388,9 @@ def create_price_slider(lower_price, price_now, upper_price, precision=8):
 def get_token_price_batch(token_list: List[str]) -> List[str]:
     prices = []
 
-    with safe_batch_requests() as batch:
+    with safe_batch_requests() as (web3, batch):
         for token in token_list:
-            batch.add(price_oracle.functions.getRate(token, usdc, False))
+            batch.add(price_oracle(web3).functions.getRate(token, usdc, False))
         batch_responses = batch.execute()
 
     for result in batch_responses:
