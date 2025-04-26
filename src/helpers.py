@@ -24,7 +24,6 @@ from data_models import Lp, Position, Token
 account_address = os.getenv("ACCOUNT_ADDRESS")
 ntfy_topic = os.getenv("NTFY_TOPIC")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-usdc = os.getenv("USDC_ADDRESS")
 aero = os.getenv("AERO_ADDRESS")
 
 
@@ -129,7 +128,7 @@ def get_positions_unstaked_concentrated(limit: int, offset: int, account: str) -
 
 
 def get_all_positions() -> tuple[List[Position], List[Position]]:
-    offset = 7000
+    offset = 7200
     limit = 100
     batch_size = 1
     last_non_empty_offset = None
@@ -312,7 +311,7 @@ def convert_by_decimals(raw_balance: int, decimals: int, precision: int = 4) -> 
 
 def convert_sqrtPriceX96_to_price(sqrtPriceX96: int, precision: int = 8) -> Decimal:
     getcontext().prec = precision + 10
-    return (Decimal(sqrtPriceX96) ** 2) / Decimal(2 ** 192)
+    return Decimal(sqrtPriceX96) / 2 ** 96
 
 
 def create_price_slider(lower_price, price_now, upper_price, precision=8):
@@ -388,12 +387,12 @@ def create_price_slider(lower_price, price_now, upper_price, precision=8):
     return buf
 
 
-def get_token_price_batch(token_list: List[str]) -> List[str]:
+def get_rate_to_eth_batch(token_list: List[str]) -> List[str]:
     prices = []
 
     with safe_batch_requests() as (web3, batch):
         for token in token_list:
-            batch.add(price_oracle(web3).functions.getRate(token, usdc, False))
+            batch.add(price_oracle(web3).functions.getRateToEth(token, False))
         batch_responses = batch.execute()
 
     for result in batch_responses:
@@ -405,11 +404,20 @@ def get_token_price_batch(token_list: List[str]) -> List[str]:
 def cal_lp_apr(lp: Lp, precision: int = 3) -> Decimal:
     getcontext().prec = precision + 10
     token0, token1 = get_lp_token_info(lp)
+    print("token info: ", token0, token1)
     apr = 0
-    emissions = lp.emissions
-    staked_token0 = lp.staked0
-    staked_token1 = lp.staked1
-    token_prices = get_token_price_batch([lp.token0, lp.token1, aero])
-    apr = 100 * convert_by_decimals(31_556_926 * emissions, 18) * Decimal(token_prices[2]) / (Decimal(token_prices[0]) * convert_by_decimals(staked_token0, token0.decimals) 
-       + Decimal(token_prices[1]) * convert_by_decimals(staked_token1, token1.decimals))
+    one_year_emissions = convert_by_decimals(31_556_926 * lp.emissions, 18)
+    staked_token0 = convert_by_decimals(lp.staked0, token0.decimals)
+    staked_token1 = convert_by_decimals(lp.staked1, token1.decimals)
+    print("staked: ", staked_token0, staked_token1)
+    rates_to_eth = get_rate_to_eth_batch([lp.token0, lp.token1, aero])
+    rate_token0 = Decimal(rates_to_eth[0]) /  10**(18 - token0.decimals)
+    rate_token1 = Decimal(rates_to_eth[1]) /  10**(18 - token1.decimals)
+    rate_aero =  Decimal(rates_to_eth[2])                   
+    
+    print("original rate ", token0.symbol, token1.symbol, "AERO: ", rates_to_eth)
+    print("adjusted rate ", token0.symbol, token1.symbol, "AERO: ", rate_token0, rate_token1, rate_aero)
+
+    apr = 100 * one_year_emissions * rate_aero / (rate_token0 * staked_token0
+       + rate_token1 * staked_token1)
     return apr

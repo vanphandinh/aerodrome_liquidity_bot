@@ -41,6 +41,7 @@ async def get_all_liquidity_messages(update=None, context=None) -> list[tuple[st
             price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
             price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
             price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+            print(price_lower, price_now, price_upper)
             image = create_price_slider(price_lower, price_now, price_upper)
             return (msg, image)
 
