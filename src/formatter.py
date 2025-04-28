@@ -1,4 +1,5 @@
 from typing import List, Literal
+from decimal import Decimal
 from helpers import convert_by_decimals, convert_sqrtPriceX96_to_price, cal_lp_apr, cal_real_price
 
 Style = Literal["ntfy", "telegram"]
@@ -11,8 +12,7 @@ class LPFormatter:
         value = convert_by_decimals(raw_balance=raw_balance, decimals=decimals, precision=precision)
         return f"{value:,.{precision}f}"
 
-    def sqrtPriceX96_to_price(self, sqrtPriceX96: int, precision: int = 8) -> str:
-        price = convert_sqrtPriceX96_to_price(sqrtPriceX96=sqrtPriceX96, precision=precision)
+    def format_price(self, price, precision: int = 8) -> Decimal:
         return f"{price:,.{precision}f}"
     
     def calculate_lp_apr(self, lp, pos, precision: int = 3) -> str:
@@ -21,7 +21,6 @@ class LPFormatter:
         real_apr = max_arp / div
         return f"{real_apr:,.{precision}f}"
 
-
     def format_position(self, pos, lp, token0, token1, is_staked: bool = True) -> str:
         t0_amt = self.convert_token_amount(pos.staked0 if is_staked else pos.amount0, token0.decimals)
         t1_amt = self.convert_token_amount(pos.staked1 if is_staked else pos.amount1, token1.decimals)
@@ -29,12 +28,16 @@ class LPFormatter:
         rewards = self.convert_token_amount(pos.emissions_earned, decimals=18)
         lp_apr = self.calculate_lp_apr(lp, pos, precision=3)
 
-        price_now = self.sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
-        price_upper = self.sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
-        price_lower = self.sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+        price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
+        price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
+        price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
         (price_upper, price_now, price_lower) = cal_real_price(token0, token1, price_upper, price_now, price_lower)
 
         in_range = price_lower <= price_now <= price_upper
+
+        price_now = self.format_price(price_now)
+        price_upper = self.format_price(price_upper)
+        price_lower = self.format_price(price_lower)
         range_status = "✅ In Range" if in_range else "⚠️ Out of Range"
 
         if self.style == "telegram":
