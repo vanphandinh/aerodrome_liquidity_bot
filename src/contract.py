@@ -28,7 +28,7 @@ rpc_cycle = cycle(rpc_endpoints)
 def get_web3():
     rpc = next(rpc_cycle)
     print(f"👉 Using RPC: {rpc}")
-    return Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 20}))
+    return Web3(Web3.HTTPProvider(rpc))
 
 def sugar_lp(web3):
     return web3.eth.contract(address=sugar_lp_address, abi=sugar_lp_abi)

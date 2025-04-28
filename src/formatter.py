@@ -1,5 +1,5 @@
 from typing import List, Literal
-from helpers import convert_by_decimals, convert_sqrtPriceX96_to_price, cal_lp_apr
+from helpers import convert_by_decimals, convert_sqrtPriceX96_to_price, cal_lp_apr, cal_real_price
 
 Style = Literal["ntfy", "telegram"]
 
@@ -32,6 +32,7 @@ class LPFormatter:
         price_now = self.sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
         price_upper = self.sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
         price_lower = self.sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+        (price_upper, price_now, price_lower) = cal_real_price(token0, token1, price_upper, price_now, price_lower)
 
         in_range = price_lower <= price_now <= price_upper
         range_status = "✅ In Range" if in_range else "⚠️ Out of Range"

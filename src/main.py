@@ -10,6 +10,7 @@ from helpers import (
     send_ntfy_notification,
     handle_telegram_commands,
     convert_sqrtPriceX96_to_price,
+    cal_real_price,
     create_price_slider,
     handle_error
 )
@@ -38,10 +39,12 @@ async def get_all_liquidity_messages(update=None, context=None) -> list[tuple[st
         def build_entry(pos, lp, is_staked):
             token0, token1 = get_lp_token_info(lp)
             msg = formatter_telegram.format_position(pos, lp, token0, token1, is_staked)
+
             price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
             price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
             price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
-            print(price_lower, price_now, price_upper)
+            (price_upper, price_now, price_lower) = cal_real_price(token0, token1, price_upper, price_now, price_lower)
+
             image = create_price_slider(price_lower, price_now, price_upper)
             return (msg, image)
 
@@ -80,9 +83,12 @@ def run_alert_loop(interval_minutes=3):
                     for i, pos in enumerate(positions):
                         lp = lps[i]
                         token0, token1 = get_lp_token_info(lp)
+
                         price_now = convert_sqrtPriceX96_to_price(lp.sqrt_ratio, precision=8)
                         price_upper = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_upper, precision=8)
                         price_lower = convert_sqrtPriceX96_to_price(pos.sqrt_ratio_lower, precision=8)
+                        (price_upper, price_now, price_lower) = cal_real_price(token0, token1, price_upper, price_now, price_lower)
+
                         in_range = price_lower <= price_now <= price_upper
                         key = f"position_{pos.id}"
 

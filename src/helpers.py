@@ -311,7 +311,16 @@ def convert_by_decimals(raw_balance: int, decimals: int, precision: int = 4) -> 
 
 def convert_sqrtPriceX96_to_price(sqrtPriceX96: int, precision: int = 8) -> Decimal:
     getcontext().prec = precision + 10
-    return Decimal(sqrtPriceX96) / 2 ** 96
+    return (Decimal(sqrtPriceX96) / (2 ** 96)) ** 2
+
+
+def cal_real_price(token0, token1, upper: Decimal, now: Decimal, lower: Decimal) -> tuple[Decimal, Decimal, Decimal]:
+    decimal_diff = token0.decimals - token1.decimals
+    return (
+        upper * 10**decimal_diff,
+        now * 10**decimal_diff,
+        lower * 10**decimal_diff
+    )
 
 
 def create_price_slider(lower_price, price_now, upper_price, precision=8):
@@ -404,19 +413,19 @@ def get_rate_to_eth_batch(token_list: List[str]) -> List[str]:
 def cal_lp_apr(lp: Lp, precision: int = 3) -> Decimal:
     getcontext().prec = precision + 10
     token0, token1 = get_lp_token_info(lp)
-    print("token info: ", token0, token1)
+    # print("token info: ", token0, token1)
     apr = 0
     one_year_emissions = convert_by_decimals(31_556_926 * lp.emissions, 18)
     staked_token0 = convert_by_decimals(lp.staked0, token0.decimals)
     staked_token1 = convert_by_decimals(lp.staked1, token1.decimals)
-    print("staked: ", staked_token0, staked_token1)
+    # print("staked: ", staked_token0, staked_token1)
     rates_to_eth = get_rate_to_eth_batch([lp.token0, lp.token1, aero])
     rate_token0 = Decimal(rates_to_eth[0]) /  10**(18 - token0.decimals)
     rate_token1 = Decimal(rates_to_eth[1]) /  10**(18 - token1.decimals)
-    rate_aero =  Decimal(rates_to_eth[2])                   
+    rate_aero = Decimal(rates_to_eth[2])                   
     
-    print("original rate ", token0.symbol, token1.symbol, "AERO: ", rates_to_eth)
-    print("adjusted rate ", token0.symbol, token1.symbol, "AERO: ", rate_token0, rate_token1, rate_aero)
+    # print("original rate ", token0.symbol, token1.symbol, "AERO: ", rates_to_eth)
+    # print("adjusted rate ", token0.symbol, token1.symbol, "AERO: ", rate_token0, rate_token1, rate_aero)
 
     apr = 100 * one_year_emissions * rate_aero / (rate_token0 * staked_token0
        + rate_token1 * staked_token1)
