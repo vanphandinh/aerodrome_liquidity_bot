@@ -153,7 +153,7 @@ def get_all_positions() -> tuple[List[Position], List[Position]]:
         elif offset < 7000:
             batch_size = 10
         else:
-            batch_size = 1
+            batch_size = 3
 
         print(f"[INFO] Fetching positions from offset {offset} with batch_size {batch_size}...")
         pos_batch = get_positions_batch(limit=limit, batch_size=batch_size, start_offset=offset, account=account_address)
