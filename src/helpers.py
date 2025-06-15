@@ -10,7 +10,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from typing import List, Union, List
 from threading import Lock
 from io import BytesIO
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, ReadTimeout
 
 import matplotlib
 matplotlib.use("Agg")
@@ -28,8 +28,8 @@ telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
 aero = os.getenv("AERO_ADDRESS")
 
 # HTTPError counter
-http_error_count = 0
-HTTP_ERROR_THRESHOLD = 5
+consecutive_net_errors = 0
+NET_ERROR_THRESHOLD = 5
 
 # Lock for safe batch requests
 web3_batch_lock = Lock()
@@ -48,17 +48,19 @@ def safe_batch_requests():
 
 
 def handle_error(e: Exception, context: str = "Error"):
-    global http_error_count
+    global consecutive_net_errors
     print(traceback.format_exc())
 
-    if isinstance(e, HTTPError):
-        http_error_count += 1
-        if http_error_count >= HTTP_ERROR_THRESHOLD:
-            send_ntfy_notification(f"❌ {context} - HTTPError occurred {http_error_count} times consecutively.")
-            http_error_count = 0  # Reset sau khi gửi thông báo
+    if isinstance(e, (HTTPError, ReadTimeout)):
+        consecutive_net_errors += 1
+        if consecutive_net_errors >= NET_ERROR_THRESHOLD:
+            send_ntfy_notification(
+                f"❌ {context} - {type(e).__name__} occurred {consecutive_net_errors} times consecutively."
+            )
+            consecutive_net_errors = 0  # Reset sau khi gửi
         return
     else:
-        http_error_count = 0  # Reset nếu lỗi không phải HTTPError
+        consecutive_net_errors = 0  # Reset nếu lỗi khác
 
     send_ntfy_notification(f"❌ {context} - {type(e).__name__}: {e}")
 

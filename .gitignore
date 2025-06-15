@@ -1,5 +1,6 @@
 .venv
 .env
+.DS_Store
 alerted_positions.db
 *.old
 src/__pycache__
