@@ -145,7 +145,7 @@ def get_positions_unstaked_concentrated(limit: int, offset: int, account: str) -
 
 
 def get_all_positions() -> tuple[List[Position], List[Position]]:
-    offset = 7200
+    offset = 8200
     limit = 100
     batch_size = 1
     last_non_empty_offset = None
