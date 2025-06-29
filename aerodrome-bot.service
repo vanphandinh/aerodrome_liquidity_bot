@@ -1,0 +1,13 @@
+[Unit]
+Description=Aerodrome Bot
+After=multi-user.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/aerodrome_liquidity_bot/
+ExecStart=/root/aerodrome_liquidity_bot/.venv/bin/python /root/aerodrome_liquidity_bot/src/main.py 
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
