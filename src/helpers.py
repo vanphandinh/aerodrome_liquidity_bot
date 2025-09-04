@@ -145,7 +145,7 @@ def get_positions_unstaked_concentrated(limit: int, offset: int, account: str) -
 
 
 def get_all_positions() -> tuple[List[Position], List[Position]]:
-    offset = 8200
+    offset = 10000
     limit = 100
     batch_size = 1
     last_non_empty_offset = None
@@ -165,9 +165,9 @@ def get_all_positions() -> tuple[List[Position], List[Position]]:
 
     while offset <= last_non_empty_offset:
         limit = 100
-        if offset < 6000:
+        if offset < 10000: #2000 per batch
             batch_size = 20
-        elif offset < 7000:
+        elif offset < 11000: #1000 per batch
             batch_size = 10
         else:
             batch_size = 3
