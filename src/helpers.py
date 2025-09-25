@@ -238,7 +238,7 @@ def send_ntfy_notification(
     :param actions: List of action dicts for interactive buttons
     :param topic: Topic name subscribed in ntfy app
     """
-    url = f"https://ntfy.sh/{topic}"
+    url = f"http://localhost:80/{topic}"
     headers = {
         "Priority": priority
     }
